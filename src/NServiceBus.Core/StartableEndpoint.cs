@@ -21,14 +21,12 @@ namespace NServiceBus
             IBuilder builder, 
             FeatureActivator featureActivator, 
             PipelineConfiguration pipelineConfiguration, 
-            IReadOnlyCollection<IWantToRunWhenBusStartsAndStops> startables,
             IEventAggregator eventAggregator)
         {
             this.settings = settings;
             this.builder = builder;
             this.featureActivator = featureActivator;
             this.pipelineConfiguration = pipelineConfiguration;
-            this.startables = startables;
             this.eventAggregator = eventAggregator;
         }
 
@@ -41,13 +39,12 @@ namespace NServiceBus
 
             await RunInstallers().ConfigureAwait(false);
             var featureRunner = await StartFeatures(messageSession).ConfigureAwait(false);
-            var runner = await StartStartables(messageSession).ConfigureAwait(false);
 
             AppDomain.CurrentDomain.SetPrincipalPolicy(PrincipalPolicy.WindowsPrincipal);
 
             var pipelineCollection = CreateIncomingPipelines(pipelineCache);
 
-            var runningInstance = new RunningEndpointInstance(settings, builder, pipelineCollection, runner, featureRunner, messageSession);
+            var runningInstance = new RunningEndpointInstance(settings, builder, pipelineCollection, featureRunner, messageSession);
 
             // set the started endpoint on CriticalError to pass the endpoint to the critical error action
             builder.Build<CriticalError>().SetEndpoint(runningInstance);
@@ -76,14 +73,6 @@ namespace NServiceBus
             }
 
             return pipelineCollection;
-        }
-
-        async Task<StartAndStoppablesRunner> StartStartables(IMessageSession session)
-        {
-            var allStartables = builder.BuildAll<IWantToRunWhenBusStartsAndStops>().Concat(startables).ToList();
-            var runner = new StartAndStoppablesRunner(allStartables);
-            await runner.Start(session).ConfigureAwait(false);
-            return runner;
         }
 
         async Task<FeatureRunner> StartFeatures(IMessageSession session)
@@ -195,7 +184,6 @@ namespace NServiceBus
         FeatureActivator featureActivator;
         PipelineConfiguration pipelineConfiguration;
         SettingsHolder settings;
-        IReadOnlyCollection<IWantToRunWhenBusStartsAndStops> startables;
         IEventAggregator eventAggregator;
     }
 }

@@ -34,6 +34,7 @@ namespace NServiceBus
     using System;
     using System.Collections.Generic;
     using System.Reflection;
+    using System.Threading.Tasks;
     using ObjectBuilder;
 
     public static partial class ConfigureCriticalErrorAction
@@ -343,6 +344,17 @@ namespace NServiceBus
         {
             throw new NotImplementedException();
         }
+    }
+
+//    [ObsoleteEx(
+//        Message = "Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package or NServiceBus.Host.AzureCloudService package instead", 
+//        RemoveInVersion = "7.0", 
+//        TreatAsErrorFromVersion = "5.0")]
+    public interface IWantToRunWhenBusStartsAndStops
+    {
+        Task Start(IMessageSession session);
+
+        Task Stop(IMessageSession session);
     }
 }
 
