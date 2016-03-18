@@ -1,6 +1,7 @@
 ﻿namespace NServiceBus.AcceptanceTests.Config
 {
     using System.Threading.Tasks;
+    using Features;
     using NServiceBus.AcceptanceTesting;
     using NServiceBus.AcceptanceTests.EndpointTemplates;
     using NServiceBus.Settings;
@@ -25,32 +26,46 @@
             public bool SettingIsAvailable { get; set; }
         }
 
+        class AfterConfigIsCompleteFeature : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<AfterConfigIsCompleteFeatureTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<AfterConfigIsCompleteFeatureTask>());
+            }
+
+            class AfterConfigIsCompleteFeatureTask : FeatureStartupTask
+            {
+                readonly ReadOnlySettings settings;
+                readonly Context context;
+
+                public AfterConfigIsCompleteFeatureTask(ReadOnlySettings settings, Context context)
+                {
+                    this.settings = settings;
+                    this.context = context;
+                }
+
+                protected override Task OnStart(IMessageSession session)
+                {
+                    context.SettingIsAvailable = settings != null;
+
+                    context.IsDone = true;
+                    return Task.FromResult(0);
+                }
+
+                protected override Task OnStop(IMessageSession session)
+                {
+                    return Task.FromResult(0);
+                }
+            }
+        }
+
+
         public class StartedEndpoint : EndpointConfigurationBuilder
         {
             public StartedEndpoint()
             {
-                EndpointSetup<DefaultServer>();
-            }
-
-            class AfterConfigIsComplete:IWantToRunWhenBusStartsAndStops
-            {
-                public Context Context { get; set; }
-
-                public ReadOnlySettings Settings { get; set; }
-
-
-                public Task Start(IMessageSession session)
-                {
-                    Context.SettingIsAvailable = Settings != null;
-
-                    Context.IsDone = true;
-                    return Task.FromResult(0);
-                }
-
-                public Task Stop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
+                EndpointSetup<DefaultServer>(c => c.EnableFeature<AfterConfigIsCompleteFeature>());
             }
         }
     }
