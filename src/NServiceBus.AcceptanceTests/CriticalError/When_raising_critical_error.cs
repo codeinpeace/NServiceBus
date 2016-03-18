@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Concurrent;
     using System.Threading.Tasks;
+    using Features;
     using NServiceBus.AcceptanceTesting;
     using NServiceBus.AcceptanceTests.EndpointTemplates;
     using NUnit.Framework;
@@ -41,7 +42,7 @@
                 .Done(c => c.CriticalErrorsRaised > 0)
                 .Run();
 
-            Assert.IsTrue(exceptions.Keys.Count == 1);
+            Assert.AreEqual(1, exceptions.Keys.Count);
         }
 
         [Test]
@@ -66,8 +67,8 @@
                 .Done(c => c.EndpointsStarted)
                 .Run();
 
-            Assert.IsTrue(context.CriticalErrorsRaised == 2);
-            Assert.IsTrue(exceptions.Keys.Count == context.CriticalErrorsRaised);
+            Assert.AreEqual(2, context.CriticalErrorsRaised);
+            Assert.AreEqual(exceptions.Keys.Count, context.CriticalErrorsRaised);
         }
 
         public class TestContext : ScenarioContext
@@ -107,25 +108,26 @@
             }
         }
 
-        public class EndpointWithCriticalErrorStartup : EndpointConfigurationBuilder
+        class CriticalErrorStartup : Feature
         {
-            public EndpointWithCriticalErrorStartup()
+            protected override void Setup(FeatureConfigurationContext context)
             {
-                EndpointSetup<DefaultServer>();
+                context.Container.ConfigureComponent<CriticalErrorStartupFeatureTask>(DependencyLifecycle.SingleInstance);  
+                context.RegisterStartupTask(b => b.Build<CriticalErrorStartupFeatureTask>());
             }
 
-            public class CriticalErrorStartup : IWantToRunWhenBusStartsAndStops
+            class CriticalErrorStartupFeatureTask : FeatureStartupTask
             {
-                CriticalError criticalError;
-                TestContext testContext;
+                readonly CriticalError criticalError;
+                readonly TestContext testContext;
 
-                public CriticalErrorStartup(CriticalError criticalError, TestContext testContext)
+                public CriticalErrorStartupFeatureTask(CriticalError criticalError, TestContext testContext)
                 {
                     this.criticalError = criticalError;
                     this.testContext = testContext;
                 }
 
-                public Task Start(IMessageSession session)
+                protected override Task OnStart(IMessageSession session)
                 {
                     criticalError.Raise("critical error 1", new SimulatedException());
                     testContext.CriticalErrorsRaised++;
@@ -136,10 +138,18 @@
                     return Task.FromResult(0);
                 }
 
-                public Task Stop(IMessageSession session)
+                protected override Task OnStop(IMessageSession session)
                 {
                     return Task.FromResult(0);
                 }
+            }
+        }
+
+        public class EndpointWithCriticalErrorStartup : EndpointConfigurationBuilder
+        {
+            public EndpointWithCriticalErrorStartup()
+            {
+                EndpointSetup<DefaultServer>(c => c.EnableFeature<CriticalErrorStartup>());
             }
         }
 
