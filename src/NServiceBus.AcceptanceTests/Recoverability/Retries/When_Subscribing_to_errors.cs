@@ -48,6 +48,7 @@
                     config.EnableFeature<SecondLevelRetries>();
                     config.EnableFeature<TimeoutManager>();
                     config.EnableFeature<FirstLevelRetries>();
+                    config.EnableFeature<MyErrorFeature>();
                 })
                     .WithConfig<TransportConfig>(c => { c.MaxRetries = 3; })
                     .WithConfig<SecondLevelRetriesConfig>(c =>
@@ -76,39 +77,54 @@
             }
         }
 
+        class MyErrorFeature : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<MyErrorTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<MyErrorTask>());
+            }
+        }
+
+        class MyErrorTask : FeatureStartupTask
+        {
+            Notifications notifications;
+            Context context;
+
+            public MyErrorTask(Notifications notifications, Context context)
+            {
+                this.notifications = notifications;
+                this.context = context;
+            }
+
+            protected override Task OnStart(IMessageSession session)
+            {
+                notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
+                {
+                    context.MessageSentToErrorException = message.Exception;
+                    context.MessageSentToError = true;
+                };
+
+                notifications.Errors.MessageHasFailedAFirstLevelRetryAttempt += (sender, retry) => context.TotalNumberOfFLREventInvocations++;
+                notifications.Errors.MessageHasBeenSentToSecondLevelRetries += (sender, retry) => context.NumberOfSLRRetriesPerformed++;
+
+                return session.SendLocal(new MessageToBeRetried
+                {
+                    Id = context.Id
+                });
+            }
+
+            protected override Task OnStop(IMessageSession session)
+            {
+                return Task.FromResult(0);
+            }
+        }
+
         [Serializable]
         public class MessageToBeRetried : IMessage
         {
             public Guid Id { get; set; }
         }
-
-        public class MyErrorSubscriber : IWantToRunWhenBusStartsAndStops
-        {
-            public Context Context { get; set; }
-
-            public Notifications Notifications { get; set; }
-
-            public Task Start(IMessageSession session)
-            {
-                Notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
-                {
-                    Context.MessageSentToErrorException = message.Exception;
-                    Context.MessageSentToError = true;
-                };
-
-                Notifications.Errors.MessageHasFailedAFirstLevelRetryAttempt += (sender, retry) => Context.TotalNumberOfFLREventInvocations++;
-                Notifications.Errors.MessageHasBeenSentToSecondLevelRetries += (sender, retry) => Context.NumberOfSLRRetriesPerformed++;
-
-                return session.SendLocal(new MessageToBeRetried
-                {
-                    Id = Context.Id
-                });
-            }
-
-            public Task Stop(IMessageSession session)
-            {
-                return Task.FromResult(0);
-            }
-        }
     }
+
 }

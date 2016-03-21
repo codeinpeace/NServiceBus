@@ -46,31 +46,48 @@
             public string PhysicalMessageId { get; set; }
         }
 
+        class ErrorNotificationSpy : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(f => f.Build<ErrorNotificationSpyTask>());
+            }
+        }
+
+        class ErrorNotificationSpyTask : FeatureStartupTask
+        {
+            readonly Notifications notifications;
+            readonly Context context;
+
+            public ErrorNotificationSpyTask(Notifications notifications, Context context)
+            {
+                this.notifications = notifications;
+                this.context = context;
+            }
+
+            protected override Task OnStart(IMessageSession session)
+            {
+                notifications.Errors.MessageSentToErrorQueue += (sender, message) => context.GaveUpOnRetries = true;
+                return Task.FromResult(0);
+            }
+
+            protected override Task OnStop(IMessageSession session)
+            {
+                return Task.FromResult(0);
+            }
+        }
+
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(b => b
-                    .EnableFeature<FirstLevelRetries>())
+                EndpointSetup<DefaultServer>(b =>
+                {
+                    b.EnableFeature<ErrorNotificationSpy>();
+                    b.EnableFeature<FirstLevelRetries>();
+                })
                     .WithConfig<TransportConfig>(c => c.MaxRetries = maxretries);
-            }
-
-            class ErrorNotificationSpy : IWantToRunWhenBusStartsAndStops
-            {
-                public Context Context { get; set; }
-
-                public Notifications Notifications { get; set; }
-
-                public Task Start(IMessageSession session)
-                {
-                    Notifications.Errors.MessageSentToErrorQueue += (sender, message) => Context.GaveUpOnRetries = true;
-                    return Task.FromResult(0);
-                }
-
-                public Task Stop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
             }
 
             class MessageToBeRetriedHandler : IHandleMessages<MessageToBeRetried>

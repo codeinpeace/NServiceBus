@@ -31,33 +31,52 @@
             public DateTime RequestedAt{ get; set; }
         }
 
+        class SetupScheduledAction : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<SetupScheduledActionTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<SetupScheduledActionTask>());
+            }
+        }
+
+        class SetupScheduledActionTask : FeatureStartupTask
+        {
+            Context context;
+
+            public SetupScheduledActionTask(Context context)
+            {
+                this.context = context;
+            }
+
+            protected override Task OnStart(IMessageSession session)
+            {
+                context.RequestedAt = DateTime.UtcNow;
+
+                return session.ScheduleEvery(TimeSpan.FromMilliseconds(5), "MyTask", c =>
+                {
+                    context.InvokedAt = DateTime.UtcNow;
+                    return Task.FromResult(0);
+                });
+            }
+
+            protected override Task OnStop(IMessageSession session)
+            {
+                return Task.FromResult(0);
+            }
+        }
+
         public class SchedulingEndpoint : EndpointConfigurationBuilder
         {
             public SchedulingEndpoint()
             {
-                EndpointSetup<DefaultServer>(config => config.EnableFeature<TimeoutManager>());
+                EndpointSetup<DefaultServer>(config =>
+                {
+                    config.EnableFeature<TimeoutManager>(); 
+                    config.EnableFeature<SetupScheduledAction>(); 
+                });
             }
 
-            class SetupScheduledAction : IWantToRunWhenBusStartsAndStops
-            {
-                public Context Context { get; set; }
-
-                public Task Start(IMessageSession session)
-                {
-                    Context.RequestedAt = DateTime.UtcNow;
-
-                    return session.ScheduleEvery(TimeSpan.FromMilliseconds(5), "MyTask", c =>
-                    {
-                        Context.InvokedAt = DateTime.UtcNow;
-                        return Task.FromResult(0);
-                    });
-                }
-
-                public Task Stop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
-            }
         }
     }
 

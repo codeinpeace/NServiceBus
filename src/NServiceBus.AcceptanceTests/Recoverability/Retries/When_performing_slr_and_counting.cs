@@ -34,6 +34,41 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
                 .StartsWith($"Giving up Second Level Retries for message '{context.PhysicalMessageId}'.")));
         }
 
+        class ErrorNotificationSpy : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
+            }
+        }
+
+        class ErrorNotificationSpyTask : FeatureStartupTask
+        {
+            Context testContext;
+            Notifications notifications;
+
+            public ErrorNotificationSpyTask(Context testContext, Notifications notifications)
+            {
+                this.testContext = testContext;
+                this.notifications = notifications;
+            }
+
+            protected override Task OnStart(IMessageSession session)
+            {
+                notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
+                {
+                    testContext.ForwardedToErrorQueue = true;
+                };
+                return Task.FromResult(0);
+            }
+
+            protected override Task OnStop(IMessageSession session)
+            {
+                return Task.FromResult(0);
+            }
+        }
+
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
@@ -43,34 +78,9 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
                     configure.DisableFeature<FirstLevelRetries>();
                     configure.EnableFeature<SecondLevelRetries>();
                     configure.EnableFeature<TimeoutManager>();
+                    configure.EnableFeature<ErrorNotificationSpy>();
                 })
                 .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
-            }
-
-            class ErrorNotificationSpy : IWantToRunWhenBusStartsAndStops
-            {
-                Context testContext;
-                Notifications notifications;
-
-                public ErrorNotificationSpy(Context testContext, Notifications notifications)
-                {
-                    this.testContext = testContext;
-                    this.notifications = notifications;
-                }
-
-                public Task Start(IMessageSession session)
-                {
-                    notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
-                    {
-                        testContext.ForwardedToErrorQueue = true;
-                    };
-                    return Task.FromResult(0);
-                }
-
-                public Task Stop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
             }
 
             class MessageToBeRetriedHandler : IHandleMessages<MessageToBeRetried>

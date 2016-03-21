@@ -40,6 +40,39 @@
                 .StartsWith($"Moving message '{testContext.PhysicalMessageId}' to the error queue because processing failed due to an exception:")));
         }
 
+        class ErrorNotificationSpy : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
+            }
+        }
+
+        class ErrorNotificationSpyTask : FeatureStartupTask
+        {
+            Context context;
+
+            Notifications notifications;
+
+            public ErrorNotificationSpyTask(Context context, Notifications notifications)
+            {
+                this.context = context;
+                this.notifications = notifications;
+            }
+
+            protected override Task OnStart(IMessageSession session)
+            {
+                notifications.Errors.MessageSentToErrorQueue += (sender, message) => context.ForwardedToErrorQueue = true;
+                return Task.FromResult(0);
+            }
+
+            protected override Task OnStop(IMessageSession session)
+            {
+                return Task.FromResult(0);
+            }
+        }
+
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
@@ -48,6 +81,7 @@
                 {
                     configure.DisableFeature<FirstLevelRetries>();
                     configure.DisableFeature<SecondLevelRetries>();
+                    configure.EnableFeature<ErrorNotificationSpy>();
                 });
             }
 
@@ -55,24 +89,6 @@
             {
                 var longSum = data.Sum(x => (long)x);
                 return unchecked((byte)longSum);
-            }
-
-            class ErrorNotificationSpy : IWantToRunWhenBusStartsAndStops
-            {
-                public Context Context { get; set; }
-
-                public Notifications Notifications { get; set; }
-
-                public Task Start(IMessageSession session)
-                {
-                    Notifications.Errors.MessageSentToErrorQueue += (sender, message) => Context.ForwardedToErrorQueue = true;
-                    return Task.FromResult(0);
-                }
-
-                public Task Stop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
             }
 
             class MessageHandler : IHandleMessages<MessageWhichFailsRetries>
