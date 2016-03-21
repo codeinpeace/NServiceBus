@@ -6,6 +6,7 @@
     using EndpointTemplates;
     using Features;
     using NServiceBus.Config;
+    using NServiceBus.Pipeline;
     using NUnit.Framework;
     using ScenarioDescriptors;
 
@@ -16,7 +17,7 @@
         {
             await Scenario.Define<Context>(c => c.Id = Guid.NewGuid())
                 .WithEndpoint<Endpoint>(b => b.DoNotFailOnErrorMessages()
-                    .When((session, context) => session.SendLocal(new MessageToFail
+                    .When((session, context) => session.SendLocal(new IncomingMessage
                     {
                         Id = context.Id,
                         UseImmediateDispatch = false
@@ -25,7 +26,7 @@
                 .WithEndpoint<ErrorSpy>()
                 .Done(c => c.MessageMovedToErrorQueue)
                 .Repeat(r => r.For<AllNativeMultiQueueTransactionTransports>())
-                .Should(c => Assert.IsFalse(c.OutgoingMessageReceived))
+                .Should(c => Assert.IsFalse(c.OutgoingMessageReceived, "Outgoing message was unexpectedly dispatched"))
                 .Should(c => Assert.AreEqual(4, c.NumberOfProcessingAttempts))
                 .Run();
         }
@@ -35,7 +36,7 @@
         {
             await Scenario.Define<Context>(c => c.Id = Guid.NewGuid())
                 .WithEndpoint<Endpoint>(b => b.DoNotFailOnErrorMessages()
-                    .When((session, context) => session.SendLocal(new MessageToFail
+                    .When((session, context) => session.SendLocal(new IncomingMessage
                     {
                         Id = context.Id,
                         UseImmediateDispatch = true
@@ -44,12 +45,12 @@
                 .WithEndpoint<ErrorSpy>()
                 .Done(c => c.MessageMovedToErrorQueue)
                 .Repeat(r => r.For<AllNativeMultiQueueTransactionTransports>())
-                .Should(c => Assert.IsFalse(c.OutgoingMessageReceived))
+                .Should(c => Assert.IsFalse(c.OutgoingMessageReceived, "Outgoing message was unexpectedly dispatched"))
                 .Should(c => Assert.AreEqual(4, c.NumberOfProcessingAttempts))
                 .Run();
         }
 
-        const string ErrorQueueName = "error_spy_queue";
+        const string ErrorSpyQueueName = "error_spy_queue";
 
         class Context : ScenarioContext
         {
@@ -65,11 +66,11 @@
             {
                 EndpointSetup<DefaultServer>((config, context) =>
                 {
-                    config.UseTransport(context.GetTransportType()).Transactions(TransportTransactionMode.TransactionScope);
                     config.DisableFeature<FirstLevelRetries>();
                     config.EnableFeature<SecondLevelRetries>();
                     config.EnableFeature<TimeoutManager>();
-                    config.SendFailedMessagesTo(ErrorQueueName);
+                    config.Pipeline.Register(new RegisterThrowingBehavior("SecondLevelRetries"));
+                    config.SendFailedMessagesTo(ErrorSpyQueueName);
                 })
                 .WithConfig<SecondLevelRetriesConfig>(slrConfig =>
                 {
@@ -78,20 +79,20 @@
                 });
             }
 
-            class FailingHandler : IHandleMessages<MessageToFail>
+            class FailingHandler : IHandleMessages<IncomingMessage>
             {
                 public Context TestContext { get; set; }
 
-                public async Task Handle(MessageToFail message, IMessageHandlerContext context)
+                public async Task Handle(IncomingMessage incomingMessage, IMessageHandlerContext context)
                 {
-                    if (message.Id == TestContext.Id)
+                    if (incomingMessage.Id == TestContext.Id)
                     {
                         TestContext.NumberOfProcessingAttempts++;
 
                         var sendOptions = new SendOptions();
-                        sendOptions.RouteToThisInstance();
 
-                        if (message.UseImmediateDispatch)
+                        sendOptions.SetDestination(ErrorSpyQueueName);
+                        if (incomingMessage.UseImmediateDispatch)
                         {
                             sendOptions.RequireImmediateDispatch();
                         }
@@ -101,8 +102,29 @@
                             Id = TestContext.Id
                         }, sendOptions);
                     }
+                }
+            }
+        }
 
-                    throw new SimulatedException();
+        class ErrorSpy : EndpointConfigurationBuilder
+        {
+            public ErrorSpy()
+            {
+                EndpointSetup<DefaultServer>().CustomEndpointName(ErrorSpyQueueName);
+            }
+
+            class Handler : IHandleMessages<IncomingMessage>
+            {
+                public Context TestContext { get; set; }
+
+                public Task Handle(IncomingMessage incomingMessage, IMessageHandlerContext context)
+                {
+                    if (TestContext.Id == incomingMessage.Id)
+                    {
+                        TestContext.MessageMovedToErrorQueue = true;
+                    }
+
+                    return Task.FromResult(0);
                 }
             }
 
@@ -122,30 +144,7 @@
             }
         }
 
-        class ErrorSpy : EndpointConfigurationBuilder
-        {
-            public ErrorSpy()
-            {
-                EndpointSetup<DefaultServer>().CustomEndpointName(ErrorQueueName);
-            }
-
-            class Handler : IHandleMessages<MessageToFail>
-            {
-                public Context TestContext { get; set; }
-
-                public Task Handle(MessageToFail message, IMessageHandlerContext context)
-                {
-                    if (TestContext.Id == message.Id)
-                    {
-                        TestContext.MessageMovedToErrorQueue = true;
-                    }
-
-                    return Task.FromResult(0);
-                }
-            }
-        }
-
-        class MessageToFail : IMessage
+        class IncomingMessage : IMessage
         {
             public Guid Id { get; set; }
             public bool UseImmediateDispatch { get; set; }
@@ -154,6 +153,24 @@
         class OutgoingMessage : IMessage
         {
             public Guid Id { get; set; }
+        }
+
+        class RegisterThrowingBehavior : RegisterStep
+        {
+            public RegisterThrowingBehavior(string stepToInsertAfter) : base("ThrowingBehavior", typeof(ThrowingBehavior), "Behavior that always throws")
+            {
+                InsertAfter(stepToInsertAfter);
+            }
+        }
+
+        class ThrowingBehavior : Behavior<ITransportReceiveContext>
+        {
+            public override async Task Invoke(ITransportReceiveContext context, Func<Task> next)
+            {
+                await next().ConfigureAwait(false);
+
+                throw new SimulatedException();
+            }
         }
     }
 }
