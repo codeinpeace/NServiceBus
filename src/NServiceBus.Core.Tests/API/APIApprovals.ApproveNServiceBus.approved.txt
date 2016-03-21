@@ -311,6 +311,9 @@ namespace NServiceBus
         public void ExcludeTypes(params System.Type[] types) { }
         public void OverridePublicReturnAddress(string address) { }
         public void RegisterComponents(System.Action<NServiceBus.ObjectBuilder.IConfigureComponents> registration) { }
+        [System.ObsoleteAttribute("Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package " +
+            "or NServiceBus.Host.AzureCloudService package instead. Will be removed in versio" +
+            "n 7.0.0.", true)]
         public void RunWhenEndpointStartsAndStops(NServiceBus.IWantToRunWhenBusStartsAndStops callbackObject) { }
         public void ScanAssembliesInNestedDirectories() { }
         public void SendOnly() { }
@@ -644,6 +647,9 @@ namespace NServiceBus
     {
         void Run(NServiceBus.Settings.SettingsHolder settings);
     }
+    [System.ObsoleteAttribute("Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package " +
+        "or NServiceBus.Host.AzureCloudService package instead. Will be removed in versio" +
+        "n 7.0.0.", true)]
     public interface IWantToRunWhenBusStartsAndStops
     {
         System.Threading.Tasks.Task Start(NServiceBus.IMessageSession session);

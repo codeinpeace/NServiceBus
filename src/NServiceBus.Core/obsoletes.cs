@@ -346,10 +346,10 @@ namespace NServiceBus
         }
     }
 
-//    [ObsoleteEx(
-//        Message = "Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package or NServiceBus.Host.AzureCloudService package instead", 
-//        RemoveInVersion = "7.0", 
-//        TreatAsErrorFromVersion = "6.0")]
+    [ObsoleteEx(
+        Message = "Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package or NServiceBus.Host.AzureCloudService package instead", 
+        RemoveInVersion = "7.0", 
+        TreatAsErrorFromVersion = "6.0")]
     public interface IWantToRunWhenBusStartsAndStops
     {
         Task Start(IMessageSession session);

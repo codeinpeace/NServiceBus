@@ -2,6 +2,7 @@
 {
     using System;
     using System.Threading.Tasks;
+    using Features;
     using NServiceBus.AcceptanceTesting;
     using NServiceBus.AcceptanceTests.EndpointTemplates;
     using NUnit.Framework;
@@ -23,18 +24,51 @@
             public bool WasCalled { get; set; }
         }
 
+        class DelayReceiverFromStarting : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<DelayReceiverFromStartingTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<DelayReceiverFromStartingTask>());
+            }
+        }
+
+        class DelayReceiverFromStartingTask : FeatureStartupTask
+        {
+            /// <summary>
+            /// Method called at startup.
+            /// </summary>
+            protected override async Task OnStart(IMessageSession session)
+            {
+                await session.SendLocal(new MyMessage());
+                await Task.Delay(TimeSpan.FromSeconds(5));
+            }
+
+            /// <summary>
+            /// Method called on shutdown.
+            /// </summary>
+            protected override Task OnStop(IMessageSession session)
+            {
+                return Task.FromResult(0);
+            }
+        }
+
         public class Endpoint : EndpointConfigurationBuilder
         {
             public Endpoint()
             {
-                EndpointSetup<DefaultServer>(c=>c.Conventions().DefiningTimeToBeReceivedAs(messageType =>
+                EndpointSetup<DefaultServer>(c=>
                 {
-                    if (messageType == typeof(MyMessage))
+                    c.EnableFeature<DelayReceiverFromStarting>();
+                    c.Conventions().DefiningTimeToBeReceivedAs(messageType =>
                     {
-                        return TimeSpan.Parse("00:00:02");
-                    }
-                    return TimeSpan.MaxValue;
-                }));
+                        if (messageType == typeof(MyMessage))
+                        {
+                            return TimeSpan.Parse("00:00:02");
+                        }
+                        return TimeSpan.MaxValue;
+                    });
+                });
             }
 
             public class MyMessageHandler : IHandleMessages<MyMessage>
@@ -44,26 +78,6 @@
                 public Task Handle(MyMessage message, IMessageHandlerContext context)
                 {
                     Context.WasCalled = true;
-                    return Task.FromResult(0);
-                }
-            }
-
-            class DelayReceiverFromStarting : IWantToRunWhenBusStartsAndStops
-            {
-                /// <summary>
-                /// Method called at startup.
-                /// </summary>
-                public async Task Start(IMessageSession session)
-                {
-                    await session.SendLocal(new MyMessage());
-                    await Task.Delay(TimeSpan.FromSeconds(5));
-                }
-
-                /// <summary>
-                /// Method called on shutdown.
-                /// </summary>
-                public Task Stop(IMessageSession session)
-                {
                     return Task.FromResult(0);
                 }
             }

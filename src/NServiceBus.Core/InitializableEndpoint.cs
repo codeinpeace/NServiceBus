@@ -38,8 +38,6 @@ namespace NServiceBus
 
             var featureActivator = BuildFeatureActivator(concreteTypes);
 
-            ConfigureStartsAndStops(concreteTypes);
-
             ConfigRunBeforeIsFinalized(concreteTypes);
 
             var transportDefinition = settings.Get<TransportDefinition>();
@@ -76,19 +74,6 @@ namespace NServiceBus
         static bool IsIWantToRunBeforeConfigurationIsFinalized(Type type)
         {
             return typeof(IWantToRunBeforeConfigurationIsFinalized).IsAssignableFrom(type);
-        }
-
-        void ConfigureStartsAndStops(IEnumerable<Type> concreteTypes)
-        {
-            foreach (var type in concreteTypes.Where(IsIWantToRunWhenBusStartsAndStops))
-            {
-                container.ConfigureComponent(type, DependencyLifecycle.InstancePerCall);
-            }
-        }
-
-        static bool IsIWantToRunWhenBusStartsAndStops(Type type)
-        {
-            return typeof(IWantToRunWhenBusStartsAndStops).IsAssignableFrom(type);
         }
 
         FeatureActivator BuildFeatureActivator(IEnumerable<Type> concreteTypes)

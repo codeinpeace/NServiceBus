@@ -4,6 +4,7 @@
     using System.Collections.Generic;
     using System.Messaging;
     using System.Threading.Tasks;
+    using Features;
     using NServiceBus.AcceptanceTesting;
     using NServiceBus.Settings;
     using NUnit.Framework;
@@ -62,6 +63,37 @@
             public bool GeneratorWasCalled { get; set; }
         }
 
+        class StartHandler : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<StartHandlerTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<StartHandlerTask>());
+            }
+        }
+
+        class StartHandlerTask : FeatureStartupTask
+        {
+            Context context;
+            ReadOnlySettings settings;
+
+            public StartHandlerTask(Context context, ReadOnlySettings settings)
+            {
+                this.context = context;
+                this.settings = settings;
+            }
+
+            protected override Task OnStart(IMessageSession session)
+            {
+                context.GeneratorWasCalled = settings.Get<bool>("GeneratorWasCalled");
+                return Task.FromResult(0);
+            }
+
+            protected override Task OnStop(IMessageSession session)
+            {
+                return Task.FromResult(0);
+            }
+        }
 
         public class Endpoint : EndpointConfigurationBuilder, IWantToRunBeforeConfigurationIsFinalized
         {
@@ -77,26 +109,10 @@
                 initialized = true;
                 EndpointSetup<DefaultServer>(c =>
                 {
+                    c.EnableFeature<StartHandler>();
                     c.AuditProcessedMessagesTo("labelAuditQueue");
                     c.UseTransport<MsmqTransport>().ApplyLabelToMessages(GetMessageLabel);
                 });
-            }
-
-            public class StartHandler : IWantToRunWhenBusStartsAndStops
-            {
-                public Context Context { get; set; }
-                public ReadOnlySettings Settings { get; set; }
-
-                public Task Start(IMessageSession session)
-                {
-                    Context.GeneratorWasCalled = Settings.Get<bool>("GeneratorWasCalled");
-                    return Task.FromResult(0);
-                }
-
-                public Task Stop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
             }
 
             static Context Context { get; set; }
