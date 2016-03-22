@@ -95,7 +95,7 @@
     <Compile Include="Performance\When_message_is_faulted.cs" />
     <Compile Include="Pipeline\When_replacing_behavior.cs" />
     <Compile Include="Persistence\When_a_persistence_does_not_provide_ISynchronizationContext.cs" />
-    <Compile Include="Recoverability\Retries\When_deferring_message_during_slr.cs" />
+    <Compile Include="Recoverability\Retries\When_message_is_handled_by_slr.cs" />
     <Compile Include="Recoverability\Retries\When_message_fails_retries.cs" />
     <Compile Include="Recoverability\Retries\When_message_goes_through_all_retries.cs" />
     <Compile Include="Recoverability\Retries\When_message_is_moved_to_error_queue.cs" />

@@ -11,10 +11,10 @@
     using NUnit.Framework;
     using ScenarioDescriptors;
 
-    public class When_deferring_message_during_slr : NServiceBusAcceptanceTest
+    public class When_message_is_handled_by_slr : NServiceBusAcceptanceTest
     {
         [Test]
-        public async Task Should_not_commit_transaction()
+        public async Task Should_not_commit_distributed_transaction()
         {
             await Scenario.Define<Context>(c => c.Id = Guid.NewGuid())
                 .WithEndpoint<Endpoint>(b => b.DoNotFailOnErrorMessages()

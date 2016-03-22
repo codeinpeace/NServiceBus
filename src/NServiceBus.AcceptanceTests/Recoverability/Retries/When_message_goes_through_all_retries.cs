@@ -32,7 +32,7 @@
         }
 
         [Test]
-        public async Task Should_not_send_outgoing_messages_using_immediate_dispatch()
+        public async Task Should_send_outgoing_messages_using_immediate_dispatch()
         {
             await Scenario.Define<Context>(c => c.Id = Guid.NewGuid())
                 .WithEndpoint<Endpoint>(b => b.DoNotFailOnErrorMessages()
@@ -45,7 +45,7 @@
                 .WithEndpoint<ErrorSpy>()
                 .Done(c => c.MessageMovedToErrorQueue)
                 .Repeat(r => r.For<AllNativeMultiQueueTransactionTransports>())
-                .Should(c => Assert.IsFalse(c.OutgoingMessageReceived, "Outgoing message was unexpectedly dispatched"))
+                .Should(c => Assert.IsTrue(c.OutgoingMessageReceived, "Outgoing message was unexpectedly dropped"))
                 .Should(c => Assert.AreEqual(4, c.NumberOfProcessingAttempts))
                 .Run();
         }
