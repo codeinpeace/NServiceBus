@@ -4,6 +4,7 @@
     using System.Linq;
     using System.Threading.Tasks;
     using AcceptanceTesting;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using NServiceBus.Config;
@@ -49,46 +50,15 @@
             public string PhysicalMessageId { get; set; }
         }
 
-        class ErrorNotificationSpy : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(f => f.Build<ErrorNotificationSpyTask>());
-            }
-        }
-
-        class ErrorNotificationSpyTask : FeatureStartupTask
-        {
-            public ErrorNotificationSpyTask(Notifications notifications, Context context)
-            {
-                this.notifications = notifications;
-                this.context = context;
-            }
-
-            protected override Task OnStart(IMessageSession session)
-            {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) => context.GaveUpOnRetries = true;
-                return Task.FromResult(0);
-            }
-
-            protected override Task OnStop(IMessageSession session)
-            {
-                return Task.FromResult(0);
-            }
-
-            Notifications notifications;
-            Context context;
-        }
-
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(b =>
+                EndpointSetup<DefaultServer>((b, context) =>
                 {
-                    b.EnableFeature<ErrorNotificationSpy>();
+                    var scenarioContext = (Context) context.ScenarioContext;
                     b.EnableFeature<FirstLevelRetries>();
+                    b.GetSettings().Get<Notifications>().Errors.MessageSentToErrorQueue += (sender, message) => scenarioContext.GaveUpOnRetries = true;
                 })
                     .WithConfig<TransportConfig>(c => c.MaxRetries = maxretries);
             }

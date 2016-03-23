@@ -4,6 +4,7 @@
     using System.Linq;
     using System.Threading.Tasks;
     using AcceptanceTesting;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using NUnit.Framework;
@@ -45,46 +46,15 @@
             public string PhysicalMessageId { get; set; }
         }
 
-        class ErrorNotificationSpy : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
-            }
-
-            class ErrorNotificationSpyTask : FeatureStartupTask
-            {
-                public ErrorNotificationSpyTask(Notifications notifications, Context context)
-                {
-                    this.notifications = notifications;
-                    this.context = context;
-                }
-
-                protected override Task OnStart(IMessageSession session)
-                {
-                    notifications.Errors.MessageSentToErrorQueue += (sender, message) => context.ForwardedToErrorQueue = true;
-                    return Task.FromResult(0);
-                }
-
-                protected override Task OnStop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
-
-                Notifications notifications;
-                Context context;
-            }
-        }
-
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
                 EndpointSetup<DefaultServer>((config, context) =>
                 {
+                    var scenarioContext = (Context) context.ScenarioContext;
                     config.EnableFeature<FirstLevelRetries>();
-                    config.EnableFeature<ErrorNotificationSpy>();
+                    config.GetSettings().Get<Notifications>().Errors.MessageSentToErrorQueue += (sender, message) => scenarioContext.ForwardedToErrorQueue = true;
                     config.UseTransport(context.GetTransportType())
                         .Transactions(TransportTransactionMode.ReceiveOnly);
                 });

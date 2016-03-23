@@ -4,6 +4,7 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
     using System.Linq;
     using System.Threading.Tasks;
     using AcceptanceTesting;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using MessageMutator;
@@ -31,54 +32,17 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
             public byte SlrChecksum { get; set; }
         }
 
-        class ErrorNotificationSpy : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
-            }
-        }
-
-        class ErrorNotificationSpyTask : FeatureStartupTask
-        {
-            public ErrorNotificationSpyTask(Context context, Notifications notifications)
-            {
-                this.notifications = notifications;
-                this.context = context;
-            }
-
-            static byte Checksum(byte[] data)
-            {
-                var longSum = data.Sum(x => (long) x);
-                return unchecked((byte) longSum);
-            }
-
-            protected override Task OnStart(IMessageSession session)
-            {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) => { context.SlrChecksum = Checksum(message.Body); };
-                return Task.FromResult(0);
-            }
-
-            protected override Task OnStop(IMessageSession session)
-            {
-                return Task.FromResult(0);
-            }
-
-            Context context;
-            Notifications notifications;
-        }
-
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(configure =>
+                EndpointSetup<DefaultServer>((configure, context) =>
                 {
+                    var scenarioContext = (Context) context.ScenarioContext;
                     configure.DisableFeature<FirstLevelRetries>();
                     configure.EnableFeature<SecondLevelRetries>();
                     configure.EnableFeature<TimeoutManager>();
-                    configure.EnableFeature<ErrorNotificationSpy>();
+                    configure.GetSettings().Get<Notifications>().Errors.MessageSentToErrorQueue += (sender, message) => { scenarioContext.SlrChecksum = Checksum(message.Body); };
                     configure.RegisterComponents(c => c.ConfigureComponent<BodyMutator>(DependencyLifecycle.InstancePerCall));
                 })
                     .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));

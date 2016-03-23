@@ -3,6 +3,7 @@
     using System;
     using System.Threading.Tasks;
     using AcceptanceTesting;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using NServiceBus.Config;
@@ -14,8 +15,14 @@
         public async Task Should_not_retry_the_message_using_flr()
         {
             var context = await Scenario.Define<Context>(c => { c.Id = Guid.NewGuid(); })
-                .WithEndpoint<RetryEndpoint>(b => b
-                    .DoNotFailOnErrorMessages())
+                .WithEndpoint<RetryEndpoint>(b =>
+                {
+                    b.DoNotFailOnErrorMessages();
+                    b.When((session, c) => session.SendLocal(new MessageToBeRetried
+                    {
+                        ContextId = c.Id
+                    }));
+                })
                 .Done(c => c.GaveUp)
                 .Run();
 
@@ -30,49 +37,15 @@
             public bool GaveUp { get; set; }
         }
 
-        class ErrorNotificationSpy : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
-            }
-
-            class ErrorNotificationSpyTask : FeatureStartupTask
-            {
-                public ErrorNotificationSpyTask(Notifications notifications, Context context)
-                {
-                    this.notifications = notifications;
-                    this.context = context;
-                }
-
-                protected override Task OnStart(IMessageSession session)
-                {
-                    notifications.Errors.MessageSentToErrorQueue += (sender, message) => context.GaveUp = true;
-                    return session.SendLocal(new MessageToBeRetried
-                    {
-                        ContextId = context.Id
-                    });
-                }
-
-                protected override Task OnStop(IMessageSession session)
-                {
-                    return Task.FromResult(0);
-                }
-
-                Notifications notifications;
-                Context context;
-            }
-        }
-
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(b =>
+                EndpointSetup<DefaultServer>((configure, context) =>
                 {
-                    b.EnableFeature<FirstLevelRetries>();
-                    b.EnableFeature<ErrorNotificationSpy>();
+                    var scenarioContext = (Context) context.ScenarioContext;
+                    configure.EnableFeature<FirstLevelRetries>();
+                    configure.GetSettings().Get<Notifications>().Errors.MessageSentToErrorQueue += (sender, message) => scenarioContext.GaveUp = true;
                 })
                     .WithConfig<TransportConfig>(c => { c.MaxRetries = 0; });
             }

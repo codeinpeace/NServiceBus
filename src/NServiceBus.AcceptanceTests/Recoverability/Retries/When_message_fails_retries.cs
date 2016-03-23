@@ -5,6 +5,7 @@
     using System.Threading.Tasks;
     using AcceptanceTesting;
     using AcceptanceTesting.Support;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using NUnit.Framework;
@@ -40,47 +41,16 @@
                 .StartsWith($"Moving message '{testContext.PhysicalMessageId}' to the error queue because processing failed due to an exception:")));
         }
 
-        class ErrorNotificationSpy : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
-            }
-        }
-
-        class ErrorNotificationSpyTask : FeatureStartupTask
-        {
-            public ErrorNotificationSpyTask(Context context, Notifications notifications)
-            {
-                this.context = context;
-                this.notifications = notifications;
-            }
-
-            protected override Task OnStart(IMessageSession session)
-            {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) => context.ForwardedToErrorQueue = true;
-                return Task.FromResult(0);
-            }
-
-            protected override Task OnStop(IMessageSession session)
-            {
-                return Task.FromResult(0);
-            }
-
-            Notifications notifications;
-            Context context;
-        }
-
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(configure =>
+                EndpointSetup<DefaultServer>((configure, context) =>
                 {
+                    var scenarioContext = (Context) context.ScenarioContext;
                     configure.DisableFeature<FirstLevelRetries>();
                     configure.DisableFeature<SecondLevelRetries>();
-                    configure.EnableFeature<ErrorNotificationSpy>();
+                    configure.GetSettings().Get<Notifications>().Errors.MessageSentToErrorQueue += (sender, message) => scenarioContext.ForwardedToErrorQueue = true;
                 });
             }
 

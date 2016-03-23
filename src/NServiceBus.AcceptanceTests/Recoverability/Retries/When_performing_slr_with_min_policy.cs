@@ -3,6 +3,7 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
     using System;
     using System.Threading.Tasks;
     using AcceptanceTesting;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using NServiceBus.Config;
@@ -30,49 +31,18 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
             public int Count { get; set; }
         }
 
-        class ErrorNotificationSpy : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
-            }
-        }
-
-        class ErrorNotificationSpyTask : FeatureStartupTask
-        {
-            public ErrorNotificationSpyTask(Context context, Notifications notifications)
-            {
-                this.notifications = notifications;
-                this.context = context;
-            }
-
-            protected override Task OnStart(IMessageSession session)
-            {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) => { context.MessageSentToErrorQueue = true; };
-                return Task.FromResult(0);
-            }
-
-            protected override Task OnStop(IMessageSession session)
-            {
-                return Task.FromResult(0);
-            }
-
-            Context context;
-            Notifications notifications;
-        }
-
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(configure =>
+                EndpointSetup<DefaultServer>((configure, context) =>
                 {
+                    var scenarioContext = (Context) context.ScenarioContext;
                     configure.DisableFeature<FirstLevelRetries>();
                     configure.EnableFeature<SecondLevelRetries>();
                     configure.EnableFeature<TimeoutManager>();
-                    configure.EnableFeature<ErrorNotificationSpy>();
                     configure.SecondLevelRetries().CustomRetryPolicy(RetryPolicy);
+                    configure.GetSettings().Get<Notifications>().Errors.MessageSentToErrorQueue += (sender, message) => { scenarioContext.MessageSentToErrorQueue = true; };
                 })
                     .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
             }

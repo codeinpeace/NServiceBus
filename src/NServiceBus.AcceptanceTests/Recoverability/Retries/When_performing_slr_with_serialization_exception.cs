@@ -4,6 +4,7 @@
     using System.Linq;
     using System.Threading.Tasks;
     using AcceptanceTesting;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using MessageMutator;
@@ -25,66 +26,29 @@
             Assert.AreEqual(context.OriginalBodyChecksum, context.SlrChecksum, "The body of the message sent to slr should be the same as the original message coming off the queue");
         }
 
-        public class Context : ScenarioContext
+        class Context : ScenarioContext
         {
             public byte OriginalBodyChecksum { get; set; }
             public byte SlrChecksum { get; set; }
             public bool ForwardedToErrorQueue { get; set; }
         }
 
-        class ErrorNotificationSpy : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<ErrorNotificationSpyTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(b => b.Build<ErrorNotificationSpyTask>());
-            }
-        }
-
-        class ErrorNotificationSpyTask : FeatureStartupTask
-        {
-            public ErrorNotificationSpyTask(Context testContext, Notifications notifications)
-            {
-                this.testContext = testContext;
-                this.notifications = notifications;
-            }
-
-            static byte Checksum(byte[] data)
-            {
-                var longSum = data.Sum(x => (long) x);
-                return unchecked((byte) longSum);
-            }
-
-            protected override Task OnStart(IMessageSession session)
-            {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
-                {
-                    testContext.ForwardedToErrorQueue = true;
-                    testContext.SlrChecksum = Checksum(message.Body);
-                };
-                return Task.FromResult(0);
-            }
-
-            protected override Task OnStop(IMessageSession session)
-            {
-                return Task.FromResult(0);
-            }
-
-            Notifications notifications;
-            Context testContext;
-        }
-
         public class RetryEndpoint : EndpointConfigurationBuilder
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(configure =>
+                EndpointSetup<DefaultServer>((configure, context) =>
                 {
+                    var testContext = (Context) context.ScenarioContext;
                     configure.DisableFeature<FirstLevelRetries>();
                     configure.EnableFeature<SecondLevelRetries>();
                     configure.EnableFeature<TimeoutManager>();
-                    configure.EnableFeature<ErrorNotificationSpy>();
                     configure.RegisterComponents(c => c.ConfigureComponent<BodyMutator>(DependencyLifecycle.InstancePerCall));
+                    configure.GetSettings().Get<Notifications>().Errors.MessageSentToErrorQueue += (sender, message) =>
+                {
+                    testContext.ForwardedToErrorQueue = true;
+                    testContext.SlrChecksum = Checksum(message.Body);
+                };
                 })
                     .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
             }

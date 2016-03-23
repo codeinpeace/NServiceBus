@@ -4,6 +4,7 @@
     using System.Linq;
     using System.Threading.Tasks;
     using AcceptanceTesting;
+    using Configuration.AdvanceExtensibility;
     using EndpointTemplates;
     using Features;
     using NServiceBus.Config;
@@ -15,8 +16,14 @@
         public async Task Should_retain_exception_details_over_FLR_and_SLR()
         {
             var context = await Scenario.Define<Context>(c => { c.Id = Guid.NewGuid(); })
-                .WithEndpoint<SLREndpoint>(b => b
-                    .DoNotFailOnErrorMessages())
+                .WithEndpoint<SLREndpoint>(b =>
+                {
+                    b.DoNotFailOnErrorMessages();
+                    b.When((session, c) => session.SendLocal(new MessageToBeRetried
+                    {
+                        Id = c.Id
+                    }));
+                })
                 .Done(c => c.MessageSentToError)
                 .Run();
 
@@ -29,7 +36,7 @@
             Assert.AreEqual(2, context.NumberOfSLRRetriesPerformed);
         }
 
-        public class Context : ScenarioContext
+        class Context : ScenarioContext
         {
             public Guid Id { get; set; }
             public int TotalNumberOfFLREventInvocations { get; set; }
@@ -43,12 +50,21 @@
         {
             public SLREndpoint()
             {
-                EndpointSetup<DefaultServer>(config =>
+                EndpointSetup<DefaultServer>((config, context) =>
                 {
+                    var testContext = (Context) context.ScenarioContext;
+                    var notifications = config.GetSettings().Get<Notifications>();
                     config.EnableFeature<SecondLevelRetries>();
                     config.EnableFeature<TimeoutManager>();
                     config.EnableFeature<FirstLevelRetries>();
-                    config.EnableFeature<MyErrorFeature>();
+                    notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
+                    {
+                        testContext.MessageSentToErrorException = message.Exception;
+                        testContext.MessageSentToError = true;
+                    };
+
+                    notifications.Errors.MessageHasFailedAFirstLevelRetryAttempt += (sender, retry) => testContext.TotalNumberOfFLREventInvocations++;
+                    notifications.Errors.MessageHasBeenSentToSecondLevelRetries += (sender, retry) => testContext.NumberOfSLRRetriesPerformed++;
                 })
                     .WithConfig<TransportConfig>(c => { c.MaxRetries = 3; })
                     .WithConfig<SecondLevelRetriesConfig>(c =>
@@ -75,49 +91,6 @@
                     throw new SimulatedException("Simulated exception message");
                 }
             }
-        }
-
-        class MyErrorFeature : Feature
-        {
-            protected override void Setup(FeatureConfigurationContext context)
-            {
-                context.Container.ConfigureComponent<MyErrorTask>(DependencyLifecycle.SingleInstance);
-                context.RegisterStartupTask(b => b.Build<MyErrorTask>());
-            }
-        }
-
-        class MyErrorTask : FeatureStartupTask
-        {
-            public MyErrorTask(Notifications notifications, Context context)
-            {
-                this.notifications = notifications;
-                this.context = context;
-            }
-
-            protected override Task OnStart(IMessageSession session)
-            {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
-                {
-                    context.MessageSentToErrorException = message.Exception;
-                    context.MessageSentToError = true;
-                };
-
-                notifications.Errors.MessageHasFailedAFirstLevelRetryAttempt += (sender, retry) => context.TotalNumberOfFLREventInvocations++;
-                notifications.Errors.MessageHasBeenSentToSecondLevelRetries += (sender, retry) => context.NumberOfSLRRetriesPerformed++;
-
-                return session.SendLocal(new MessageToBeRetried
-                {
-                    Id = context.Id
-                });
-            }
-
-            protected override Task OnStop(IMessageSession session)
-            {
-                return Task.FromResult(0);
-            }
-
-            Context context;
-            Notifications notifications;
         }
 
         [Serializable]
