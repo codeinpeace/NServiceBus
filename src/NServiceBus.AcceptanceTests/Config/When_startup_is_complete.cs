@@ -1,11 +1,11 @@
 ﻿namespace NServiceBus.AcceptanceTests.Config
 {
     using System.Threading.Tasks;
+    using AcceptanceTesting;
+    using EndpointTemplates;
     using Features;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
-    using NServiceBus.Settings;
     using NUnit.Framework;
+    using Settings;
 
     public class When_startup_is_complete : NServiceBusAcceptanceTest
     {
@@ -13,9 +13,9 @@
         public async Task Settings_should_be_available_via_DI()
         {
             var context = await Scenario.Define<Context>()
-                    .WithEndpoint<StartedEndpoint>()
-                    .Done(c => c.IsDone)
-                    .Run();
+                .WithEndpoint<StartedEndpoint>()
+                .Done(c => c.IsDone)
+                .Run();
 
             Assert.True(context.SettingIsAvailable, "Setting should be available in DI");
         }
@@ -36,9 +36,6 @@
 
             class AfterConfigIsCompleteFeatureTask : FeatureStartupTask
             {
-                readonly ReadOnlySettings settings;
-                readonly Context context;
-
                 public AfterConfigIsCompleteFeatureTask(ReadOnlySettings settings, Context context)
                 {
                     this.settings = settings;
@@ -57,9 +54,11 @@
                 {
                     return Task.FromResult(0);
                 }
+
+                Context context;
+                ReadOnlySettings settings;
             }
         }
-
 
         public class StartedEndpoint : EndpointConfigurationBuilder
         {
@@ -69,6 +68,4 @@
             }
         }
     }
-
-
 }

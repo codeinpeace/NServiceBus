@@ -2,9 +2,9 @@
 {
     using System;
     using System.Threading.Tasks;
-    using EndpointTemplates;
     using AcceptanceTesting;
-    using NServiceBus.Features;
+    using EndpointTemplates;
+    using Features;
     using NUnit.Framework;
     using ScenarioDescriptors;
 
@@ -14,21 +14,21 @@
         public async Task Should_execute_the_task()
         {
             await Scenario.Define<Context>()
-                    .WithEndpoint<SchedulingEndpoint>()
-                    .Done(c => c.InvokedAt.HasValue)
-                    .Repeat(r => r.For(Transports.Default))
-                    .Should(c =>
-                    {
-                        Assert.True(c.InvokedAt.HasValue);
-                        Assert.Greater(c.InvokedAt.Value - c.RequestedAt, TimeSpan.FromMilliseconds(5));
-                    })
-                  .Run(TimeSpan.FromSeconds(60));
+                .WithEndpoint<SchedulingEndpoint>()
+                .Done(c => c.InvokedAt.HasValue)
+                .Repeat(r => r.For(Transports.Default))
+                .Should(c =>
+                {
+                    Assert.True(c.InvokedAt.HasValue);
+                    Assert.Greater(c.InvokedAt.Value - c.RequestedAt, TimeSpan.FromMilliseconds(5));
+                })
+                .Run(TimeSpan.FromSeconds(60));
         }
 
-        public class Context : ScenarioContext
+        class Context : ScenarioContext
         {
-            public DateTime? InvokedAt{ get; set; }
-            public DateTime RequestedAt{ get; set; }
+            public DateTime? InvokedAt { get; set; }
+            public DateTime RequestedAt { get; set; }
         }
 
         class SetupScheduledAction : Feature
@@ -42,8 +42,6 @@
 
         class SetupScheduledActionTask : FeatureStartupTask
         {
-            Context context;
-
             public SetupScheduledActionTask(Context context)
             {
                 this.context = context;
@@ -64,21 +62,20 @@
             {
                 return Task.FromResult(0);
             }
+
+            Context context;
         }
 
-        public class SchedulingEndpoint : EndpointConfigurationBuilder
+        class SchedulingEndpoint : EndpointConfigurationBuilder
         {
             public SchedulingEndpoint()
             {
                 EndpointSetup<DefaultServer>(config =>
                 {
-                    config.EnableFeature<TimeoutManager>(); 
-                    config.EnableFeature<SetupScheduledAction>(); 
+                    config.EnableFeature<TimeoutManager>();
+                    config.EnableFeature<SetupScheduledAction>();
                 });
             }
-
         }
     }
-
-
 }

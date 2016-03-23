@@ -3,22 +3,15 @@
     using System;
     using System.Linq;
     using System.Threading.Tasks;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
+    using AcceptanceTesting;
+    using EndpointTemplates;
+    using Features;
+    using MessageMutator;
     using NServiceBus.Config;
-    using NServiceBus.Features;
-    using NServiceBus.MessageMutator;
     using NUnit.Framework;
 
     public class When_performing_slr_with_serialization_exception : NServiceBusAcceptanceTest
     {
-        public class Context : ScenarioContext
-        {
-            public byte OriginalBodyChecksum { get; set; }
-            public byte SlrChecksum { get; set; }
-            public bool ForwardedToErrorQueue { get; set; }
-        }
-
         [Test]
         public async Task Should_preserve_the_original_body_for_serialization_exceptions()
         {
@@ -32,6 +25,13 @@
             Assert.AreEqual(context.OriginalBodyChecksum, context.SlrChecksum, "The body of the message sent to slr should be the same as the original message coming off the queue");
         }
 
+        public class Context : ScenarioContext
+        {
+            public byte OriginalBodyChecksum { get; set; }
+            public byte SlrChecksum { get; set; }
+            public bool ForwardedToErrorQueue { get; set; }
+        }
+
         class ErrorNotificationSpy : Feature
         {
             protected override void Setup(FeatureConfigurationContext context)
@@ -43,9 +43,6 @@
 
         class ErrorNotificationSpyTask : FeatureStartupTask
         {
-            Context testContext;
-            Notifications notifications;
-
             public ErrorNotificationSpyTask(Context testContext, Notifications notifications)
             {
                 this.testContext = testContext;
@@ -72,6 +69,9 @@
             {
                 return Task.FromResult(0);
             }
+
+            Notifications notifications;
+            Context testContext;
         }
 
         public class RetryEndpoint : EndpointConfigurationBuilder
@@ -86,19 +86,17 @@
                     configure.EnableFeature<ErrorNotificationSpy>();
                     configure.RegisterComponents(c => c.ConfigureComponent<BodyMutator>(DependencyLifecycle.InstancePerCall));
                 })
-                .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
+                    .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
             }
 
             static byte Checksum(byte[] data)
             {
-                var longSum = data.Sum(x => (long)x);
-                return unchecked((byte)longSum);
+                var longSum = data.Sum(x => (long) x);
+                return unchecked((byte) longSum);
             }
 
             class BodyMutator : IMutateOutgoingTransportMessages, IMutateIncomingTransportMessages
             {
-                Context testContext;
-
                 public BodyMutator(Context testContext)
                 {
                     this.testContext = testContext;
@@ -120,6 +118,8 @@
                 {
                     return Task.FromResult(0);
                 }
+
+                Context testContext;
             }
 
             class MessageToBeRetriedHandler : IHandleMessages<MessageToBeRetried>
@@ -135,6 +135,5 @@
         public class MessageToBeRetried : IMessage
         {
         }
-
     }
 }

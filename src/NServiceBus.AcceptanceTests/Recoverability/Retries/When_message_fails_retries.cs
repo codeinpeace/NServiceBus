@@ -3,10 +3,10 @@
     using System;
     using System.Linq;
     using System.Threading.Tasks;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTesting.Support;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
-    using NServiceBus.Features;
+    using AcceptanceTesting;
+    using AcceptanceTesting.Support;
+    using EndpointTemplates;
+    using Features;
     using NUnit.Framework;
 
     public class When_message_fails_retries : NServiceBusAcceptanceTest
@@ -18,10 +18,10 @@
             try
             {
                 await Scenario.Define<Context>()
-                        .WithEndpoint<RetryEndpoint>(b => b
+                    .WithEndpoint<RetryEndpoint>(b => b
                         .When((session, c) => session.SendLocal(new MessageWhichFailsRetries())))
-                        .Done(c => c.ForwardedToErrorQueue)
-                        .Run();
+                    .Done(c => c.ForwardedToErrorQueue)
+                    .Run();
             }
             catch (AggregateException ex)
             {
@@ -31,7 +31,7 @@
             Assert.AreEqual(1, exception.FailedMessages.Count);
             var failedMessage = exception.FailedMessages.Single();
 
-            var testContext = (Context)exception.ScenarioContext;
+            var testContext = (Context) exception.ScenarioContext;
             Assert.AreEqual(typeof(MessageWhichFailsRetries).AssemblyQualifiedName, failedMessage.Headers[Headers.EnclosedMessageTypes]);
             Assert.AreEqual(testContext.PhysicalMessageId, failedMessage.MessageId);
             Assert.IsAssignableFrom(typeof(SimulatedException), failedMessage.Exception);
@@ -51,10 +51,6 @@
 
         class ErrorNotificationSpyTask : FeatureStartupTask
         {
-            Context context;
-
-            Notifications notifications;
-
             public ErrorNotificationSpyTask(Context context, Notifications notifications)
             {
                 this.context = context;
@@ -71,6 +67,9 @@
             {
                 return Task.FromResult(0);
             }
+
+            Notifications notifications;
+            Context context;
         }
 
         public class RetryEndpoint : EndpointConfigurationBuilder
@@ -87,8 +86,8 @@
 
             public static byte Checksum(byte[] data)
             {
-                var longSum = data.Sum(x => (long)x);
-                return unchecked((byte)longSum);
+                var longSum = data.Sum(x => (long) x);
+                return unchecked((byte) longSum);
             }
 
             class MessageHandler : IHandleMessages<MessageWhichFailsRetries>
@@ -103,7 +102,7 @@
             }
         }
 
-        public class Context : ScenarioContext
+        class Context : ScenarioContext
         {
             public bool ForwardedToErrorQueue { get; set; }
 

@@ -3,10 +3,10 @@
     using System;
     using System.Linq;
     using System.Threading.Tasks;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
+    using AcceptanceTesting;
+    using EndpointTemplates;
+    using Features;
     using NServiceBus.Config;
-    using NServiceBus.Features;
     using NUnit.Framework;
 
     public class When_Subscribing_to_errors : NServiceBusAcceptanceTest
@@ -88,9 +88,6 @@
 
         class MyErrorTask : FeatureStartupTask
         {
-            Notifications notifications;
-            Context context;
-
             public MyErrorTask(Notifications notifications, Context context)
             {
                 this.notifications = notifications;
@@ -118,6 +115,9 @@
             {
                 return Task.FromResult(0);
             }
+
+            Context context;
+            Notifications notifications;
         }
 
         [Serializable]
@@ -126,5 +126,4 @@
             public Guid Id { get; set; }
         }
     }
-
 }

@@ -2,9 +2,9 @@
 {
     using System;
     using System.Threading.Tasks;
+    using AcceptanceTesting;
+    using EndpointTemplates;
     using Features;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
     using NServiceBus.Config;
     using NUnit.Framework;
 
@@ -14,15 +14,15 @@
         public async Task Should_not_retry_the_message_using_flr()
         {
             var context = await Scenario.Define<Context>(c => { c.Id = Guid.NewGuid(); })
-                    .WithEndpoint<RetryEndpoint>(b => b
-                        .DoNotFailOnErrorMessages())
-                    .Done(c => c.GaveUp)
-                    .Run();
+                .WithEndpoint<RetryEndpoint>(b => b
+                    .DoNotFailOnErrorMessages())
+                .Done(c => c.GaveUp)
+                .Run();
 
             Assert.AreEqual(1, context.NumberOfTimesInvoked, "No FLR should be in use if MaxRetries is set to 0");
         }
 
-        public class Context : ScenarioContext
+        class Context : ScenarioContext
         {
             public Guid Id { get; set; }
             public int NumberOfTimesInvoked { get; set; }
@@ -40,9 +40,6 @@
 
             class ErrorNotificationSpyTask : FeatureStartupTask
             {
-                readonly Notifications notifications;
-                readonly Context context;
-
                 public ErrorNotificationSpyTask(Notifications notifications, Context context)
                 {
                     this.notifications = notifications;
@@ -62,6 +59,9 @@
                 {
                     return Task.FromResult(0);
                 }
+
+                Notifications notifications;
+                Context context;
             }
         }
 
@@ -69,19 +69,18 @@
         {
             public RetryEndpoint()
             {
-                EndpointSetup<DefaultServer>(b => {
-                    b.DisableFeature<Features.SecondLevelRetries>();
+                EndpointSetup<DefaultServer>(b =>
+                {
+                    b.EnableFeature<FirstLevelRetries>();
                     b.EnableFeature<ErrorNotificationSpy>();
-                } )
-                    .WithConfig<TransportConfig>(c =>
-                    {
-                        c.MaxRetries = 0;
-                    });
+                })
+                    .WithConfig<TransportConfig>(c => { c.MaxRetries = 0; });
             }
 
             class MessageToBeRetriedHandler : IHandleMessages<MessageToBeRetried>
             {
                 public Context Context { get; set; }
+
                 public Task Handle(MessageToBeRetried message, IMessageHandlerContext context)
                 {
                     if (Context.Id != message.ContextId)
@@ -100,6 +99,4 @@
             public Guid ContextId { get; set; }
         }
     }
-
-
 }

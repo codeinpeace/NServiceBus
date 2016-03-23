@@ -2,9 +2,9 @@
 {
     using System;
     using System.Threading.Tasks;
+    using AcceptanceTesting;
+    using EndpointTemplates;
     using Features;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
     using NUnit.Framework;
 
     public class When_TimeToBeReceived_has_expired : NServiceBusAcceptanceTest
@@ -13,8 +13,8 @@
         public async Task Message_should_not_be_received()
         {
             var context = await Scenario.Define<Context>()
-                    .WithEndpoint<Endpoint>()
-                    .Run(TimeSpan.FromSeconds(10));
+                .WithEndpoint<Endpoint>()
+                .Run(TimeSpan.FromSeconds(10));
 
             Assert.IsFalse(context.WasCalled);
         }
@@ -24,20 +24,23 @@
             public bool WasCalled { get; set; }
         }
 
+        class DelayReceiverFromStarting : Feature
+        {
+            protected override void Setup(FeatureConfigurationContext context)
+            {
+                context.Container.ConfigureComponent<DelayReceiverFromStartingTask>(DependencyLifecycle.SingleInstance);
+                context.RegisterStartupTask(b => b.Build<DelayReceiverFromStartingTask>());
+            }
+        }
+
         class DelayReceiverFromStartingTask : FeatureStartupTask
         {
-            /// <summary>
-            /// Method called at startup.
-            /// </summary>
             protected override async Task OnStart(IMessageSession session)
             {
                 await session.SendLocal(new MyMessage());
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
-            /// <summary>
-            /// Method called on shutdown.
-            /// </summary>
             protected override Task OnStop(IMessageSession session)
             {
                 return Task.FromResult(0);
@@ -48,7 +51,7 @@
         {
             public Endpoint()
             {
-                EndpointSetup<DefaultServer>();
+                EndpointSetup<DefaultServer>(c => c.EnableFeature<DelayReceiverFromStarting>());
             }
 
             public class MyMessageHandler : IHandleMessages<MyMessage>

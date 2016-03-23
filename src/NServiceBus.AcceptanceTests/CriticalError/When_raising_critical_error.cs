@@ -3,9 +3,9 @@
     using System;
     using System.Collections.Concurrent;
     using System.Threading.Tasks;
+    using AcceptanceTesting;
+    using EndpointTemplates;
     using Features;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
     using NUnit.Framework;
     using CriticalError = NServiceBus.CriticalError;
 
@@ -25,10 +25,7 @@
             await Scenario.Define<TestContext>()
                 .WithEndpoint<EndpointWithCriticalError>(b =>
                 {
-                    b.CustomConfig(config =>
-                    {
-                        config.DefineCriticalErrorAction(addCritical);
-                    });
+                    b.CustomConfig(config => { config.DefineCriticalErrorAction(addCritical); });
 
                     b.When((session, c) =>
                     {
@@ -57,13 +54,7 @@
             };
 
             var context = await Scenario.Define<TestContext>()
-                .WithEndpoint<EndpointWithCriticalErrorStartup>(b =>
-                {
-                    b.CustomConfig(config =>
-                    {
-                        config.DefineCriticalErrorAction(addCritical);
-                    });
-                })
+                .WithEndpoint<EndpointWithCriticalErrorStartup>(b => { b.CustomConfig(config => { config.DefineCriticalErrorAction(addCritical); }); })
                 .Done(c => c.EndpointsStarted)
                 .Run();
 
@@ -86,9 +77,6 @@
 
             public class CriticalHandler : IHandleMessages<Message>
             {
-                CriticalError criticalError;
-                TestContext testContext;
-
                 public CriticalHandler(CriticalError criticalError, TestContext testContext)
                 {
                     this.criticalError = criticalError;
@@ -105,6 +93,9 @@
 
                     return Task.FromResult(0);
                 }
+
+                CriticalError criticalError;
+                TestContext testContext;
             }
         }
 
@@ -112,15 +103,12 @@
         {
             protected override void Setup(FeatureConfigurationContext context)
             {
-                context.Container.ConfigureComponent<CriticalErrorStartupFeatureTask>(DependencyLifecycle.SingleInstance);  
+                context.Container.ConfigureComponent<CriticalErrorStartupFeatureTask>(DependencyLifecycle.SingleInstance);
                 context.RegisterStartupTask(b => b.Build<CriticalErrorStartupFeatureTask>());
             }
 
             class CriticalErrorStartupFeatureTask : FeatureStartupTask
             {
-                readonly CriticalError criticalError;
-                readonly TestContext testContext;
-
                 public CriticalErrorStartupFeatureTask(CriticalError criticalError, TestContext testContext)
                 {
                     this.criticalError = criticalError;
@@ -142,6 +130,9 @@
                 {
                     return Task.FromResult(0);
                 }
+
+                readonly CriticalError criticalError;
+                readonly TestContext testContext;
             }
         }
 

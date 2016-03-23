@@ -3,20 +3,14 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
     using System;
     using System.Linq;
     using System.Threading.Tasks;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
+    using AcceptanceTesting;
+    using EndpointTemplates;
+    using Features;
     using NServiceBus.Config;
-    using NServiceBus.Features;
     using NUnit.Framework;
 
     public class When_performing_slr_and_counting : NServiceBusAcceptanceTest
     {
-        public class Context : ScenarioContext
-        {
-            public bool ForwardedToErrorQueue { get; set; }
-            public string PhysicalMessageId { get; set; }
-        }
-
         [Test]
         public async Task Should_reschedule_message_three_times_by_default()
         {
@@ -34,6 +28,12 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
                 .StartsWith($"Giving up Second Level Retries for message '{context.PhysicalMessageId}'.")));
         }
 
+        class Context : ScenarioContext
+        {
+            public bool ForwardedToErrorQueue { get; set; }
+            public string PhysicalMessageId { get; set; }
+        }
+
         class ErrorNotificationSpy : Feature
         {
             protected override void Setup(FeatureConfigurationContext context)
@@ -45,9 +45,6 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
 
         class ErrorNotificationSpyTask : FeatureStartupTask
         {
-            Context testContext;
-            Notifications notifications;
-
             public ErrorNotificationSpyTask(Context testContext, Notifications notifications)
             {
                 this.testContext = testContext;
@@ -56,10 +53,7 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
 
             protected override Task OnStart(IMessageSession session)
             {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
-                {
-                    testContext.ForwardedToErrorQueue = true;
-                };
+                notifications.Errors.MessageSentToErrorQueue += (sender, message) => { testContext.ForwardedToErrorQueue = true; };
                 return Task.FromResult(0);
             }
 
@@ -67,6 +61,9 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
             {
                 return Task.FromResult(0);
             }
+
+            Notifications notifications;
+            Context testContext;
         }
 
         public class RetryEndpoint : EndpointConfigurationBuilder
@@ -80,13 +77,11 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
                     configure.EnableFeature<TimeoutManager>();
                     configure.EnableFeature<ErrorNotificationSpy>();
                 })
-                .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
+                    .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
             }
 
             class MessageToBeRetriedHandler : IHandleMessages<MessageToBeRetried>
             {
-                Context testContext;
-
                 public MessageToBeRetriedHandler(Context testContext)
                 {
                     this.testContext = testContext;
@@ -97,6 +92,8 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
                     testContext.PhysicalMessageId = context.MessageId;
                     throw new SimulatedException();
                 }
+
+                Context testContext;
             }
         }
 

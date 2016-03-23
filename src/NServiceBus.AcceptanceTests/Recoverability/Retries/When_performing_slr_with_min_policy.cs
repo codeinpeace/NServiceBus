@@ -2,21 +2,15 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
 {
     using System;
     using System.Threading.Tasks;
-    using NServiceBus.AcceptanceTesting;
-    using NServiceBus.AcceptanceTests.EndpointTemplates;
+    using AcceptanceTesting;
+    using EndpointTemplates;
+    using Features;
     using NServiceBus.Config;
-    using NServiceBus.Features;
-    using NServiceBus.Transports;
     using NUnit.Framework;
+    using Transports;
 
     public class When_performing_slr_with_min_policy : NServiceBusAcceptanceTest
     {
-        public class Context : ScenarioContext
-        {
-            public bool MessageSentToErrorQueue { get; set; }
-            public int Count { get; set; }
-        }
-
         [Test]
         public async Task Should_execute_once()
         {
@@ -30,6 +24,12 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
             Assert.AreEqual(context.Count, 1);
         }
 
+        class Context : ScenarioContext
+        {
+            public bool MessageSentToErrorQueue { get; set; }
+            public int Count { get; set; }
+        }
+
         class ErrorNotificationSpy : Feature
         {
             protected override void Setup(FeatureConfigurationContext context)
@@ -41,9 +41,6 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
 
         class ErrorNotificationSpyTask : FeatureStartupTask
         {
-            Notifications notifications;
-            Context context;
-
             public ErrorNotificationSpyTask(Context context, Notifications notifications)
             {
                 this.notifications = notifications;
@@ -52,10 +49,7 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
 
             protected override Task OnStart(IMessageSession session)
             {
-                notifications.Errors.MessageSentToErrorQueue += (sender, message) =>
-                {
-                    context.MessageSentToErrorQueue = true;
-                };
+                notifications.Errors.MessageSentToErrorQueue += (sender, message) => { context.MessageSentToErrorQueue = true; };
                 return Task.FromResult(0);
             }
 
@@ -63,6 +57,9 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
             {
                 return Task.FromResult(0);
             }
+
+            Context context;
+            Notifications notifications;
         }
 
         public class RetryEndpoint : EndpointConfigurationBuilder
@@ -77,7 +74,7 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
                     configure.EnableFeature<ErrorNotificationSpy>();
                     configure.SecondLevelRetries().CustomRetryPolicy(RetryPolicy);
                 })
-                .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
+                    .WithConfig<SecondLevelRetriesConfig>(c => c.TimeIncrease = TimeSpan.FromMilliseconds(1));
             }
 
             static TimeSpan RetryPolicy(IncomingMessage transportMessage)
@@ -87,8 +84,6 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
 
             class MessageToBeRetriedHandler : IHandleMessages<MessageToBeRetried>
             {
-                Context testContext;
-
                 public MessageToBeRetriedHandler(Context testContext)
                 {
                     this.testContext = testContext;
@@ -99,6 +94,8 @@ namespace NServiceBus.AcceptanceTests.Recoverability.Retries
                     testContext.Count ++;
                     throw new SimulatedException();
                 }
+
+                Context testContext;
             }
         }
 

@@ -20,7 +20,7 @@ namespace NServiceBus
     /// <summary>
     /// Configuration used to create an endpoint instance.
     /// </summary>
-    public class EndpointConfiguration : ExposeSettings
+    public partial class EndpointConfiguration : ExposeSettings
     {
         /// <summary>
         /// Initializes the endpoint configuration builder.
@@ -157,19 +157,6 @@ namespace NServiceBus
         {
             Guard.AgainstNull(nameof(builder), builder);
             customBuilder = builder;
-        }
-
-        /// <summary>
-        /// Register specific instance to run when endpoint starts and stops.
-        /// </summary>
-        /// <param name="callbackObject">Callback object.</param>
-        [ObsoleteEx(
-            Message = "Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package or NServiceBus.Host.AzureCloudService package instead", 
-            RemoveInVersion = "7.0", 
-            TreatAsErrorFromVersion = "6.0")]
-        public void RunWhenEndpointStartsAndStops(IWantToRunWhenBusStartsAndStops callbackObject)
-        {
-            throw new NotImplementedException();
         }
 
         /// <summary>

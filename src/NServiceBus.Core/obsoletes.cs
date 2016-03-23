@@ -197,7 +197,6 @@ namespace NServiceBus
         {
             throw new NotImplementedException();
         }
-
     }
 
     [ObsoleteEx(
@@ -347,14 +346,31 @@ namespace NServiceBus
     }
 
     [ObsoleteEx(
-        Message = "Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package or NServiceBus.Host.AzureCloudService package instead", 
-        RemoveInVersion = "7.0", 
+        Message = "Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package or NServiceBus.Host.AzureCloudService package instead",
+        RemoveInVersion = "7.0",
         TreatAsErrorFromVersion = "6.0")]
     public interface IWantToRunWhenBusStartsAndStops
     {
         Task Start(IMessageSession session);
 
         Task Stop(IMessageSession session);
+    }
+
+    public partial class EndpointConfiguration
+    {
+        /// <summary>
+        /// Register specific instance to run when endpoint starts and stops.
+        /// </summary>
+        /// <param name="callbackObject">Callback object.</param>
+        [ObsoleteEx(
+            Message = "Implement `IWantToRunWhenEndpointStartsAndStops` in the NServiceBus.Host package or NServiceBus.Host.AzureCloudService package instead", 
+            RemoveInVersion = "7.0", 
+            TreatAsErrorFromVersion = "6.0")]
+        public void RunWhenEndpointStartsAndStops(IWantToRunWhenBusStartsAndStops callbackObject)
+        {
+            throw new NotImplementedException();
+        }
+
     }
 }
 
@@ -488,8 +504,7 @@ namespace NServiceBus.Timeout.Core
         [ObsoleteEx(
             Message = "Not used anymore",
             RemoveInVersion = "7.0",
-            TreatAsErrorFromVersion = "6.0")]
-        public const string OriginalReplyToAddress = "NServiceBus.Timeout.ReplyToAddress";
+            TreatAsErrorFromVersion = "6.0")] public const string OriginalReplyToAddress = "NServiceBus.Timeout.ReplyToAddress";
     }
 }
 
@@ -1381,8 +1396,7 @@ namespace NServiceBus
         [ObsoleteEx(
             TreatAsErrorFromVersion = "6",
             RemoveInVersion = "7",
-            Message = "The WinIdName header is no longer attached to outgoing message to avoid passing security related information on the wire. Should you rely on the header being present you can add a message mutator that sets it.")]
-        public const string WindowsIdentityName = "WinIdName";
+            Message = "The WinIdName header is no longer attached to outgoing message to avoid passing security related information on the wire. Should you rely on the header being present you can add a message mutator that sets it.")] public const string WindowsIdentityName = "WinIdName";
     }
 }
 
